@@ -17,6 +17,9 @@ import random
 import argparse
 from selenium import webdriver
 
+reload(sys)  
+sys.setdefaultencoding('utf8')
+
 # get function name
 FuncName = lambda n=0: sys._getframe(n + 1).f_code.co_name
 
@@ -407,6 +410,7 @@ class JDWrapper(object):
 
 	def buy_good_count(self, good_id, count):
 		url = 'http://cart.jd.com/changeNum.action'
+		cart_url = 'http://cart.jd.com/cart.action'
 
 		payload = {
 			'venderId': '8888',
@@ -417,14 +421,32 @@ class JDWrapper(object):
 			'promoID':'0',
 			'outSkus': '',
 			'random': random.random(),
-			'locationId':'1-72-2799-0',
+			'locationId':'19-1684-19467-51437',
 		}
-
+		
 		try:
+			rs = self.sess.get(cart_url)
+			if rs.status_code == 200:
+				soup = bs4.BeautifulSoup(rs.text, "html.parser")
+				item = soup.find(id='product_' + good_id).find('div', class_='quantity-form')
+				#item = soup.find('div #product_' + good_id + ' div.item-form div.p-quantity div.quantity-form')
+				ss = item.find('input')
+				ss = ss['id'].split('_')
+				payload['venderId'] = ss[1]
+				payload['ptype'] = ss[4]
+				if len(ss) == 7:
+					payload['targetId'] = ss[6]
+					
+				payload['promoID'] = item['promoid']
+			
 			rs = self.sess.post(url, params = payload)
 			if rs.status_code == 200:
 				js = json.loads(rs.text)
 				if js.get('pcount'):
+					if not js['sortedWebCartResult']['allSkuIds'] or js['pcount'] != count:
+						print u'设置购买数量失败'
+						return False
+						
 					print u'购买数量：%s > %s' % (js['pid'], js['pcount'])
 					return True
 
@@ -559,6 +581,7 @@ if __name__ == '__main__':
 	mi_huan = '3180350'
 	hw_watch = '2567304'
 	iphone_6s = '1861095'
+	good_count = '1'
 	
 	options = parser.parse_args()
 	print options
@@ -569,7 +592,7 @@ if __name__ == '__main__':
 
 	if options.password == '' or options.username == '':
 		print u'请输入用户名密码'
-		return
+		exit(1)
 
 	jd = JDWrapper(options.username, options.password)
 	jd.login_try()
